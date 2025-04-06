@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "706588275698",
+    "project_id": "flutter-haber-uygulamasi",
+    "storage_bucket": "flutter-haber-uygulamasi.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:706588275698:android:c71e139657c0aa3a35716b",
+        "android_client_info": {
+          "package_name": "com.example.news_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDy6eIjh076LItLMYogZp1a-x0cfNO_9TQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:706588275698:android:6e5911082a512e6735716b",
+        "android_client_info": {
+          "package_name": "com.example.newss_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDy6eIjh076LItLMYogZp1a-x0cfNO_9TQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
