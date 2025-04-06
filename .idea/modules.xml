@@ -2,7 +2,11 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+<<<<<<< HEAD
       <module fileurl="file://$PROJECT_DIR$/.idea/flutter-project.iml" filepath="$PROJECT_DIR$/.idea/flutter-project.iml" />
+=======
+      <module fileurl="file://$PROJECT_DIR$/.idea/fonk.project.iml" filepath="$PROJECT_DIR$/.idea/fonk.project.iml" />
+>>>>>>> 8c242de2274a84e5cda88e2bc05257b19a3e9bf4
     </modules>
   </component>
 </project>
