@@ -1,8 +1,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:news_app/models/article.dart';
+import 'package:news_app/services/config.dart';
 
 class NewsService {
+  // News API anahtarı ve temel URL'i config dosyasından al
+  final String _apiKey = Config.newsApiKey;
+  final String _baseUrl = Config.newsApiBaseUrl;
+  final String _country = Config.defaultCountry;
+
   // API düzgün çalışmadığı durumda örnek veriler
   final List<Map<String, dynamic>> _sampleNewsData = [
     {
@@ -145,76 +151,277 @@ class NewsService {
     'technology': [2],
   };
 
+  // News API'den gelen verileri işleyerek şeritli görselleri filtreleyelim
+  List<Article> _processArticles(List<dynamic> apiArticles) {
+    return apiArticles.map((article) {
+      // Şeritli görsel varsa, alternatif bir görsel kullan
+      if (article['urlToImage'] != null &&
+          (article['urlToImage'].toString().contains('caution') ||
+              article['urlToImage'].toString().contains('warning'))) {
+        // Şeritli görsel tespit edilirse temiz bir görsel atayalım
+        article['urlToImage'] =
+            "https://picsum.photos/800/400?random=${article['publishedAt']}";
+      }
+      return Article.fromJson(article);
+    }).toList();
+  }
+
   // Türkiye'deki en güncel haberleri getir
   Future<List<Article>> getTopHeadlines() async {
     try {
-      // API çağrısı yapmak yerine örnek verileri kullanıyoruz
-      await Future.delayed(
-        const Duration(seconds: 1),
-      ); // Simüle edilmiş bir ağ gecikmesi
+      // News API bazen Türkiye için boş sonuç dönebiliyor, "us" kaynak parametresini deneyelim
+      print(
+        'API çağrısı yapılıyor: $_baseUrl/top-headlines?country=us&apiKey=$_apiKey',
+      );
+      final response = await http.get(
+        Uri.parse('$_baseUrl/top-headlines?country=us&apiKey=$_apiKey'),
+      );
 
+      print('API yanıt kodu: ${response.statusCode}');
+      // Çok fazla veri yazdırmaması için kısıtlıyoruz
+      if (response.body.length > 500) {
+        print(
+          'API yanıtı (ilk 500 karakter): ${response.body.substring(0, 500)}...',
+        );
+      } else {
+        print('API yanıtı: ${response.body}');
+      }
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        print('API durumu: ${data['status']}');
+        if (data['status'] == 'ok') {
+          final List<dynamic> articles = data['articles'];
+          print('Alınan haber sayısı: ${articles.length}');
+
+          if (articles.isEmpty) {
+            print('API hiç haber döndürmedi, örnek verileri kullanıyoruz');
+            return _sampleNewsData
+                .map((article) => Article.fromJson(article))
+                .toList();
+          }
+
+          return _processArticles(articles);
+        } else {
+          // API hata döndü, örnek verileri kullan
+          print('API hata döndü: ${data['message'] ?? 'Bilinmeyen hata'}');
+          return _sampleNewsData
+              .map((article) => Article.fromJson(article))
+              .toList();
+        }
+      } else {
+        // API çağrısı başarısız oldu, örnek verileri kullan
+        print('API çağrısı başarısız: ${response.statusCode}');
+        print('Hata içeriği: ${response.body}');
+        return _sampleNewsData
+            .map((article) => Article.fromJson(article))
+            .toList();
+      }
+    } catch (e) {
+      print('Haber getirme hatası: $e');
+      // Hata durumunda örnek verileri kullan
       return _sampleNewsData
           .map((article) => Article.fromJson(article))
           .toList();
-    } catch (e) {
-      print('Haber getirme hatası: $e');
-      throw Exception('Haberler yüklenirken bir hata oluştu: $e');
     }
   }
 
   // Belirli bir kategorideki haberleri getir
   Future<List<Article>> getNewsByCategory(String category) async {
     try {
-      // API çağrısı yapmak yerine örnek verileri kullanıyoruz
-      await Future.delayed(
-        const Duration(seconds: 1),
-      ); // Simüle edilmiş bir ağ gecikmesi
+      // News API bazen Türkiye için boş sonuç dönebiliyor, "us" kaynak parametresini deneyelim
+      print(
+        'API çağrısı yapılıyor (kategori $category): $_baseUrl/top-headlines?country=us&category=$category&apiKey=$_apiKey',
+      );
+      final response = await http.get(
+        Uri.parse(
+          '$_baseUrl/top-headlines?country=us&category=$category&apiKey=$_apiKey',
+        ),
+      );
 
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['status'] == 'ok') {
+          final List<dynamic> articles = data['articles'];
+          print('Alınan kategori haberi sayısı: ${articles.length}');
+
+          if (articles.isEmpty) {
+            print(
+              'API hiç kategori haberi döndürmedi, örnek verileri kullanıyoruz',
+            );
+            if (!_categoryIndices.containsKey(category)) {
+              return getTopHeadlines(); // Kategori bulunamazsa tüm haberleri getir
+            }
+
+            final indices = _categoryIndices[category]!;
+            return indices
+                .map((index) => _sampleNewsData[index])
+                .map((article) => Article.fromJson(article))
+                .toList();
+          }
+
+          return _processArticles(articles);
+        } else {
+          // API hata döndü, örnek verileri kullan
+          print('API hata döndü: ${data['message']}');
+          if (!_categoryIndices.containsKey(category)) {
+            return getTopHeadlines(); // Kategori bulunamazsa tüm haberleri getir
+          }
+
+          final indices = _categoryIndices[category]!;
+          return indices
+              .map((index) => _sampleNewsData[index])
+              .map((article) => Article.fromJson(article))
+              .toList();
+        }
+      } else {
+        // API çağrısı başarısız oldu, örnek verileri kullan
+        print('API çağrısı başarısız: ${response.statusCode}');
+        if (!_categoryIndices.containsKey(category)) {
+          return getTopHeadlines(); // Kategori bulunamazsa tüm haberleri getir
+        }
+
+        final indices = _categoryIndices[category]!;
+        return indices
+            .map((index) => _sampleNewsData[index])
+            .map((article) => Article.fromJson(article))
+            .toList();
+      }
+    } catch (e) {
+      print('Haber getirme hatası: $e');
+      // Hata durumunda örnek verileri kullan
       if (!_categoryIndices.containsKey(category)) {
         return getTopHeadlines(); // Kategori bulunamazsa tüm haberleri getir
       }
 
       final indices = _categoryIndices[category]!;
-      final categoryArticles =
-          indices
-              .map((index) => _sampleNewsData[index])
-              .map((article) => Article.fromJson(article))
-              .toList();
-
-      return categoryArticles;
-    } catch (e) {
-      print('Haber getirme hatası: $e');
-      throw Exception('Haberler yüklenirken bir hata oluştu: $e');
+      return indices
+          .map((index) => _sampleNewsData[index])
+          .map((article) => Article.fromJson(article))
+          .toList();
     }
   }
 
   // Haber araması yap
   Future<List<Article>> searchNews(String query) async {
     try {
-      // API çağrısı yapmak yerine örnek verileri kullanıyoruz
-      await Future.delayed(
-        const Duration(seconds: 1),
-      ); // Simüle edilmiş bir ağ gecikmesi
+      // Önce gerçek API'den verileri almayı deneyelim
+      final response = await http.get(
+        Uri.parse(
+          '$_baseUrl/everything?q=$query&language=$_country&sortBy=publishedAt&apiKey=$_apiKey',
+        ),
+      );
 
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['status'] == 'ok') {
+          final List<dynamic> articles = data['articles'];
+          return articles.map((article) => Article.fromJson(article)).toList();
+        } else {
+          // API hata döndü, örnek verilerden arama yap
+          print('API hata döndü: ${data['message']}');
+          query = query.toLowerCase();
+          final searchResults =
+              _sampleNewsData
+                  .where(
+                    (article) =>
+                        article['title'].toLowerCase().contains(query) ||
+                        (article['description'] != null &&
+                            article['description'].toLowerCase().contains(
+                              query,
+                            )),
+                  )
+                  .map((article) => Article.fromJson(article))
+                  .toList();
+          return searchResults;
+        }
+      } else {
+        // API çağrısı başarısız oldu, örnek verilerden arama yap
+        print('API çağrısı başarısız: ${response.statusCode}');
+        query = query.toLowerCase();
+        final searchResults =
+            _sampleNewsData
+                .where(
+                  (article) =>
+                      article['title'].toLowerCase().contains(query) ||
+                      (article['description'] != null &&
+                          article['description'].toLowerCase().contains(query)),
+                )
+                .map((article) => Article.fromJson(article))
+                .toList();
+        return searchResults;
+      }
+    } catch (e) {
+      print('Haber arama hatası: $e');
+      // Hata durumunda örnek verilerden arama yap
       query = query.toLowerCase();
       final searchResults =
           _sampleNewsData
               .where(
                 (article) =>
-                    article['title'].toString().toLowerCase().contains(query) ||
+                    article['title'].toLowerCase().contains(query) ||
                     (article['description'] != null &&
-                        article['description']
-                            .toString()
-                            .toLowerCase()
-                            .contains(query)),
+                        article['description'].toLowerCase().contains(query)),
               )
               .map((article) => Article.fromJson(article))
               .toList();
-
       return searchResults;
+    }
+  }
+
+  // Son dakika haberlerini getir
+  Future<List<Article>> getBreakingNews() async {
+    try {
+      // Son dakika haberleri için API çağrısı
+      print(
+        'API çağrısı yapılıyor (son dakika): $_baseUrl/top-headlines?country=us&apiKey=$_apiKey',
+      );
+      final response = await http.get(
+        Uri.parse('$_baseUrl/top-headlines?country=us&apiKey=$_apiKey'),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['status'] == 'ok') {
+          final List<dynamic> articles = data['articles'];
+          print('Alınan son dakika haberi sayısı: ${articles.length}');
+
+          if (articles.isEmpty) {
+            print(
+              'API hiç son dakika haberi döndürmedi, örnek verileri kullanıyoruz',
+            );
+            return _sampleNewsData
+                .take(5)
+                .map((article) => Article.fromJson(article))
+                .toList();
+          }
+
+          // Son 5 haberi al
+          final breakingNews = articles.take(5).toList();
+          return _processArticles(breakingNews);
+        } else {
+          // API hata döndü, örnek verilerin ilk 5 tanesini kullan
+          print('API hata döndü: ${data['message']}');
+          return _sampleNewsData
+              .take(5)
+              .map((article) => Article.fromJson(article))
+              .toList();
+        }
+      } else {
+        // API çağrısı başarısız oldu, örnek verilerin ilk 5 tanesini kullan
+        print('API çağrısı başarısız: ${response.statusCode}');
+        return _sampleNewsData
+            .take(5)
+            .map((article) => Article.fromJson(article))
+            .toList();
+      }
     } catch (e) {
-      print('Haber arama hatası: $e');
-      throw Exception('Haberler aranırken bir hata oluştu: $e');
+      print('Son dakika haberleri getirme hatası: $e');
+      // Hata durumunda örnek verilerin ilk 5 tanesini kullan
+      return _sampleNewsData
+          .take(5)
+          .map((article) => Article.fromJson(article))
+          .toList();
     }
   }
 }

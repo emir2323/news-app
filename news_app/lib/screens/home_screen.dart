@@ -41,8 +41,11 @@ class _HomeScreenState extends State<HomeScreen>
     'Bilim': 'science',
   };
   List<Article> _articles = [];
+  List<Article> _breakingNews = [];
   bool _isLoading = true;
+  bool _isLoadingBreakingNews = true;
   String _errorMessage = '';
+  String _breakingNewsErrorMessage = '';
   String _selectedCategory = 'general';
 
   @override
@@ -52,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen>
     _tabController = TabController(length: _categories.length, vsync: this);
     _tabController.addListener(_handleTabSelection);
     _loadNews();
+    _loadBreakingNews();
   }
 
   void _handleTabSelection() {
@@ -79,9 +83,12 @@ class _HomeScreenState extends State<HomeScreen>
 
     try {
       final articles = await _newsService.getTopHeadlines();
+
       setState(() {
         _articles = articles;
         _isLoading = false;
+        // Debug - örnek veri kontrolü
+        print('Yüklenen haber sayısı: ${articles.length}');
       });
     } catch (e) {
       setState(() {
@@ -111,12 +118,33 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _refreshNews() async {
-    if (_selectedCategory == 'general') {
-      await _loadNews();
-    } else {
-      await _loadNewsByCategory(_selectedCategory);
+  Future<void> _loadBreakingNews() async {
+    setState(() {
+      _isLoadingBreakingNews = true;
+      _breakingNewsErrorMessage = '';
+    });
+
+    try {
+      final breakingNews = await _newsService.getBreakingNews();
+      setState(() {
+        _breakingNews = breakingNews;
+        _isLoadingBreakingNews = false;
+      });
+    } catch (e) {
+      setState(() {
+        _breakingNewsErrorMessage = e.toString();
+        _isLoadingBreakingNews = false;
+      });
     }
+  }
+
+  Future<void> _refreshNews() async {
+    await Future.wait([
+      _loadBreakingNews(),
+      _selectedCategory == 'general'
+          ? _loadNews()
+          : _loadNewsByCategory(_selectedCategory),
+    ]);
   }
 
   Widget _buildArticleList() {
@@ -214,6 +242,7 @@ class _HomeScreenState extends State<HomeScreen>
                       height: 200,
                       width: double.infinity,
                       fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
                       placeholder:
                           (context, url) => Shimmer.fromColors(
                             baseColor: Colors.grey[300]!,
@@ -422,9 +451,235 @@ class _HomeScreenState extends State<HomeScreen>
           labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: _refreshNews,
-        child: _buildArticleList(),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _refreshNews,
+          child: Column(
+            children: [
+              // Son dakika haberleri
+              if (_selectedCategory == 'general') _buildBreakingNewsSection(),
+              // Ana haber listesi
+              Expanded(child: _buildArticleList()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBreakingNewsSection() {
+    if (_isLoadingBreakingNews) {
+      return _buildBreakingNewsShimmer();
+    }
+
+    if (_breakingNewsErrorMessage.isNotEmpty) {
+      return const SizedBox.shrink(); // Hata durumunda gösterme
+    }
+
+    if (_breakingNews.isEmpty) {
+      return const SizedBox.shrink(); // Haber yoksa gösterme
+    }
+
+    return Container(
+      height: 250,
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Text(
+                  'Son Dakika',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.fiber_new, color: Colors.red),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              itemCount: _breakingNews.length,
+              itemBuilder: (context, index) {
+                final article = _breakingNews[index];
+                return Container(
+                  width: 280,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (context) => NewsDetailScreen(article: article),
+                          ),
+                        );
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Haber görseli
+                          if (article.urlToImage != null)
+                            ClipRRect(
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(12),
+                                topRight: Radius.circular(12),
+                              ),
+                              child: Stack(
+                                children: [
+                                  CachedNetworkImage(
+                                    imageUrl: article.urlToImage!,
+                                    height: 120,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    alignment: Alignment.topCenter,
+                                    placeholder:
+                                        (context, url) => Shimmer.fromColors(
+                                          baseColor: Colors.grey[300]!,
+                                          highlightColor: Colors.grey[100]!,
+                                          child: Container(
+                                            height: 120,
+                                            width: double.infinity,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                    errorWidget:
+                                        (context, url, error) => Container(
+                                          height: 120,
+                                          width: double.infinity,
+                                          color: Colors.grey[300],
+                                          child: const Icon(Icons.error),
+                                        ),
+                                  ),
+                                  // Gerekirse buraya ek UI elemanları eklenebilir
+                                ],
+                              ),
+                            ),
+                          // Başlık
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(
+                              article.title,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBreakingNewsShimmer() {
+    return Container(
+      height: 250,
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Text(
+                  'Son Dakika',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.fiber_new, color: Colors.red),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Shimmer.fromColors(
+              baseColor: Colors.grey[300]!,
+              highlightColor: Colors.grey[100]!,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                itemCount: 5,
+                itemBuilder: (context, index) {
+                  return Container(
+                    width: 280,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            height: 120,
+                            width: double.infinity,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.only(
+                                topLeft: Radius.circular(12),
+                                topRight: Radius.circular(12),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  height: 14,
+                                  width: double.infinity,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  height: 14,
+                                  width: 200,
+                                  color: Colors.white,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

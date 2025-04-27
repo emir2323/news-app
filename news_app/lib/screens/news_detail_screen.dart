@@ -79,6 +79,7 @@ class NewsDetailScreen extends StatelessWidget {
                   width: double.infinity,
                   height: 200,
                   fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
                   placeholder:
                       (context, url) => Container(
                         height: 200,
