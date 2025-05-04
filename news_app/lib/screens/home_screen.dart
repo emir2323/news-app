@@ -22,6 +22,11 @@ class _HomeScreenState extends State<HomeScreen>
   final AuthService _authService = AuthService();
   final NewsService _newsService = NewsService();
   late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
+  List<Article> _searchResults = [];
+  bool _isSearchLoading = false;
+  String _searchErrorMessage = '';
   final List<String> _categories = [
     'Genel',
     'Spor',
@@ -145,6 +150,35 @@ class _HomeScreenState extends State<HomeScreen>
           ? _loadNews()
           : _loadNewsByCategory(_selectedCategory),
     ]);
+  }
+
+  Future<void> _searchNews(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _isSearching = false;
+        _searchResults = [];
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearching = true;
+      _isSearchLoading = true;
+      _searchErrorMessage = '';
+    });
+
+    try {
+      final results = await _newsService.searchNews(query);
+      setState(() {
+        _searchResults = results;
+        _isSearchLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _searchErrorMessage = e.toString();
+        _isSearchLoading = false;
+      });
+    }
   }
 
   Widget _buildArticleList() {
@@ -420,17 +454,195 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Future<void> _signOut() async {
-    try {
-      await _authService.signOut();
-      if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Çıkış yapılırken hata oluştu: $e')),
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Haber ara...',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon:
+              _searchController.text.isNotEmpty
+                  ? IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {
+                        _isSearching = false;
+                        _searchResults = [];
+                      });
+                    },
+                  )
+                  : null,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          filled: true,
+          fillColor: Colors.grey[100],
+        ),
+        onSubmitted: _searchNews,
+        onChanged: (value) {
+          if (value.isEmpty) {
+            setState(() {
+              _isSearching = false;
+              _searchResults = [];
+            });
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildSearchResults() {
+    if (_isSearchLoading) {
+      return _buildLoadingShimmer();
+    }
+
+    if (_searchErrorMessage.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(
+              'Arama yapılırken bir hata oluştu',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _searchErrorMessage,
+              style: GoogleFonts.poppins(fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       );
     }
+
+    if (_searchResults.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.search_off, size: 48, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              'Arama sonucu bulunamadı',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(8),
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        final article = _searchResults[index];
+        final DateTime publishDate = DateTime.parse(article.publishedAt);
+        final DateFormat formatter = DateFormat('dd MMMM yyyy', 'tr_TR');
+        final String formattedDate = formatter.format(publishDate);
+
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => NewsDetailScreen(article: article),
+                ),
+              );
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (article.urlToImage != null)
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
+                    child: CachedNetworkImage(
+                      imageUrl: article.urlToImage!,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder:
+                          (context, url) => Shimmer.fromColors(
+                            baseColor: Colors.grey[300]!,
+                            highlightColor: Colors.grey[100]!,
+                            child: Container(height: 200, color: Colors.white),
+                          ),
+                      errorWidget:
+                          (context, url, error) => Container(
+                            height: 200,
+                            color: Colors.grey[300],
+                            child: const Icon(Icons.error),
+                          ),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        article.title,
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (article.description != null)
+                        Text(
+                          article.description!,
+                          style: GoogleFonts.poppins(fontSize: 14),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            article.source ?? 'Bilinmeyen Kaynak',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          Text(
+                            formattedDate,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -442,27 +654,36 @@ class _HomeScreenState extends State<HomeScreen>
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.exit_to_app), onPressed: _signOut),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabs: _categories.map((category) => Tab(text: category)).toList(),
-          labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refreshNews,
-          child: Column(
-            children: [
-              // Son dakika haberleri
-              if (_selectedCategory == 'general') _buildBreakingNewsSection(),
-              // Ana haber listesi
-              Expanded(child: _buildArticleList()),
-            ],
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await _authService.signOut();
+              if (mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                );
+              }
+            },
           ),
-        ),
+        ],
+      ),
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          if (!_isSearching) ...[
+            _buildBreakingNewsSection(),
+            TabBar(
+              controller: _tabController,
+              tabs: _categories.map((category) => Tab(text: category)).toList(),
+              isScrollable: true,
+              labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              unselectedLabelStyle: GoogleFonts.poppins(),
+            ),
+            Expanded(child: _buildArticleList()),
+          ] else
+            Expanded(child: _buildSearchResults()),
+        ],
       ),
     );
   }
@@ -482,7 +703,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     return Container(
       height: 250,
-      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      padding: const EdgeInsets.only(top: 16, bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -599,7 +820,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildBreakingNewsShimmer() {
     return Container(
       height: 250,
-      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      padding: const EdgeInsets.only(top: 16, bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

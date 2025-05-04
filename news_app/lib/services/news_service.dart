@@ -302,70 +302,81 @@ class NewsService {
     }
   }
 
-  // Haber araması yap
+  // Haber arama fonksiyonu
   Future<List<Article>> searchNews(String query) async {
     try {
-      // Önce gerçek API'den verileri almayı deneyelim
+      print('Arama yapılıyor: $_baseUrl/everything?q=$query&apiKey=$_apiKey');
       final response = await http.get(
-        Uri.parse(
-          '$_baseUrl/everything?q=$query&language=$_country&sortBy=publishedAt&apiKey=$_apiKey',
-        ),
+        Uri.parse('$_baseUrl/everything?q=$query&apiKey=$_apiKey'),
       );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
         if (data['status'] == 'ok') {
           final List<dynamic> articles = data['articles'];
-          return articles.map((article) => Article.fromJson(article)).toList();
-        } else {
-          // API hata döndü, örnek verilerden arama yap
-          print('API hata döndü: ${data['message']}');
-          query = query.toLowerCase();
-          final searchResults =
-              _sampleNewsData
-                  .where(
-                    (article) =>
-                        article['title'].toLowerCase().contains(query) ||
-                        (article['description'] != null &&
-                            article['description'].toLowerCase().contains(
-                              query,
-                            )),
-                  )
-                  .map((article) => Article.fromJson(article))
-                  .toList();
-          return searchResults;
-        }
-      } else {
-        // API çağrısı başarısız oldu, örnek verilerden arama yap
-        print('API çağrısı başarısız: ${response.statusCode}');
-        query = query.toLowerCase();
-        final searchResults =
-            _sampleNewsData
+          print('Arama sonucu bulunan haber sayısı: ${articles.length}');
+
+          if (articles.isEmpty) {
+            print('Arama sonucu bulunamadı, örnek verileri kullanıyoruz');
+            return _sampleNewsData
                 .where(
                   (article) =>
-                      article['title'].toLowerCase().contains(query) ||
-                      (article['description'] != null &&
-                          article['description'].toLowerCase().contains(query)),
+                      article['title'].toString().toLowerCase().contains(
+                        query.toLowerCase(),
+                      ) ||
+                      article['description'].toString().toLowerCase().contains(
+                        query.toLowerCase(),
+                      ),
                 )
                 .map((article) => Article.fromJson(article))
                 .toList();
-        return searchResults;
-      }
-    } catch (e) {
-      print('Haber arama hatası: $e');
-      // Hata durumunda örnek verilerden arama yap
-      query = query.toLowerCase();
-      final searchResults =
-          _sampleNewsData
+          }
+
+          return _processArticles(articles);
+        } else {
+          print('API hata döndü: ${data['message'] ?? 'Bilinmeyen hata'}');
+          return _sampleNewsData
               .where(
                 (article) =>
-                    article['title'].toLowerCase().contains(query) ||
-                    (article['description'] != null &&
-                        article['description'].toLowerCase().contains(query)),
+                    article['title'].toString().toLowerCase().contains(
+                      query.toLowerCase(),
+                    ) ||
+                    article['description'].toString().toLowerCase().contains(
+                      query.toLowerCase(),
+                    ),
               )
               .map((article) => Article.fromJson(article))
               .toList();
-      return searchResults;
+        }
+      } else {
+        print('API çağrısı başarısız: ${response.statusCode}');
+        return _sampleNewsData
+            .where(
+              (article) =>
+                  article['title'].toString().toLowerCase().contains(
+                    query.toLowerCase(),
+                  ) ||
+                  article['description'].toString().toLowerCase().contains(
+                    query.toLowerCase(),
+                  ),
+            )
+            .map((article) => Article.fromJson(article))
+            .toList();
+      }
+    } catch (e) {
+      print('Haber arama hatası: $e');
+      return _sampleNewsData
+          .where(
+            (article) =>
+                article['title'].toString().toLowerCase().contains(
+                  query.toLowerCase(),
+                ) ||
+                article['description'].toString().toLowerCase().contains(
+                  query.toLowerCase(),
+                ),
+          )
+          .map((article) => Article.fromJson(article))
+          .toList();
     }
   }
 
