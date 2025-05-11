@@ -20,8 +20,18 @@ class Article {
   });
 
   factory Article.fromJson(Map<String, dynamic> json) {
+    // API'den gelen source formatı farklı olabilir
+    String? sourceValue;
+    if (json['source'] != null) {
+      if (json['source'] is String) {
+        sourceValue = json['source'];
+      } else if (json['source'] is Map) {
+        sourceValue = json['source']['name'];
+      }
+    }
+
     return Article(
-      source: json['source'] != null ? json['source']['name'] : null,
+      source: sourceValue,
       author: json['author'],
       title: json['title'] ?? 'Başlık bulunamadı',
       description: json['description'],
@@ -30,5 +40,18 @@ class Article {
       publishedAt: json['publishedAt'] ?? DateTime.now().toIso8601String(),
       content: json['content'],
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'source': source,
+      'author': author,
+      'title': title,
+      'description': description,
+      'url': url,
+      'urlToImage': urlToImage,
+      'publishedAt': publishedAt,
+      'content': content,
+    };
   }
 }

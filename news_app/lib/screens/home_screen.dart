@@ -9,6 +9,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:news_app/services/favorite_service.dart';
+import 'package:news_app/screens/favorites_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   final AuthService _authService = AuthService();
   final NewsService _newsService = NewsService();
+  final FavoriteService _favoriteService = FavoriteService();
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
@@ -181,6 +184,109 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  Future<void> _toggleFavorite(Article article) async {
+    try {
+      print('Favori işlemi başlatıldı: ${article.title}');
+      final isFavorite = await _favoriteService.isFavorite(article.url);
+      print('Mevcut favori durumu: $isFavorite');
+
+      if (isFavorite) {
+        await _favoriteService.removeFromFavorites(article.url);
+        print('Haber favorilerden kaldırıldı: ${article.title}');
+      } else {
+        await _favoriteService.addToFavorites(article);
+        print('Haber favorilere eklendi: ${article.title}');
+      }
+
+      if (mounted) {
+        setState(() {
+          print('UI güncellendi');
+        });
+      }
+    } catch (e) {
+      print('Favori işlemi hatası: $e');
+    }
+  }
+
+  Widget _buildFavoriteButton(Article article) {
+    return FutureBuilder<bool>(
+      future: _favoriteService.isFavorite(article.url),
+      builder: (context, snapshot) {
+        final isFavorite = snapshot.data ?? false;
+        return GestureDetector(
+          onTap: () {
+            print('Favori butonu tıklandı: ${article.title}');
+            _toggleFavorite(article);
+          },
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            child: Icon(
+              isFavorite ? Icons.star : Icons.star_border,
+              color: isFavorite ? Colors.amber : Colors.grey,
+              size: 28,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Yeni favori butonu oluştur
+  Widget _buildSimpleFavoriteButton(Article article) {
+    return FutureBuilder<bool>(
+      future: _favoriteService.isFavorite(article.url),
+      builder: (context, snapshot) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final isFavorite = snapshot.data ?? false;
+            return IconButton(
+              icon: Icon(
+                isFavorite ? Icons.star : Icons.star_border,
+                color: isFavorite ? Colors.amber : Colors.grey,
+                size: 28,
+              ),
+              onPressed: () async {
+                try {
+                  print('Favori butonu basıldı: ${article.title}');
+
+                  if (isFavorite) {
+                    await _favoriteService.removeFromFavorites(article.url);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '${article.title} favorilerden kaldırıldı',
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  } else {
+                    await _favoriteService.addToFavorites(article);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${article.title} favorilere eklendi'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+
+                  // Widget'ı yenile
+                  setState(() {});
+
+                  // Ana sayfayı güncelle
+                  if (mounted) {
+                    this.setState(() {});
+                  }
+                } catch (e) {
+                  print('Favori işlemi hatası: $e');
+                }
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildArticleList() {
     if (_isLoading) {
       return _buildLoadingShimmer();
@@ -333,14 +439,19 @@ class _HomeScreenState extends State<HomeScreen>
                       const SizedBox(height: 8),
 
                       // Başlık
-                      Text(
-                        article.title,
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              article.title,
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          _buildSimpleFavoriteButton(article),
+                        ],
                       ),
                       const SizedBox(height: 8),
 
@@ -599,12 +710,21 @@ class _HomeScreenState extends State<HomeScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        article.title,
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              article.title,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          _buildSimpleFavoriteButton(article),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       if (article.description != null)
@@ -654,6 +774,17 @@ class _HomeScreenState extends State<HomeScreen>
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.favorite),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const FavoritesScreen(),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -794,14 +925,21 @@ class _HomeScreenState extends State<HomeScreen>
                           // Başlık
                           Padding(
                             padding: const EdgeInsets.all(8.0),
-                            child: Text(
-                              article.title,
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    article.title,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                _buildSimpleFavoriteButton(article),
+                              ],
                             ),
                           ),
                         ],
