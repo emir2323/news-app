@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:news_app/firebase_options.dart';
 import 'package:news_app/screens/login_screen.dart';
 import 'package:news_app/screens/home_screen.dart';
+import 'package:news_app/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +18,11 @@ void main() async {
     print('Firebase başlatma hatası: $e');
     print('Hata detayı: ${e.toString()}');
   }
+
+  // Bildirim servisini başlat
+  final notificationService = NotificationService();
+  await notificationService.initialize();
+
   runApp(const MyApp());
 }
 

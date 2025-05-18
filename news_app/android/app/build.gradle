@@ -11,12 +11,13 @@ android {
     ndkVersion = "27.0.12077973"  // Bu satır Flutter'ın gerektirdiği sürüm olmalı
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
     }
 
     kotlinOptions {
-        jvmTarget = "17"  // Kotlin için JVM hedefi 17 olarak ayarlandı
+        jvmTarget = '17'
     }
 
     defaultConfig {
@@ -45,4 +46,5 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.android.support:multidex:1.0.3")
     implementation("com.google.android.gms:play-services-safetynet:18.0.1")
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
 }

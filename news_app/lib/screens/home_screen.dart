@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:news_app/services/favorite_service.dart';
 import 'package:news_app/screens/favorites_screen.dart';
+import 'package:news_app/screens/notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -795,6 +796,17 @@ class _HomeScreenState extends State<HomeScreen>
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
                 );
               }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NotificationsScreen(),
+                ),
+              );
             },
           ),
         ],
